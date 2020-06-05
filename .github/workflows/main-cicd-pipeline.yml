@@ -36,3 +36,14 @@ jobs:
         run: docker build -t $REPO:latest .
       - name: Publish Docker image
         run: docker push $REPO
+        
+  redeploy:
+   name: Trigger webhook to Redeploy
+   runs-on: ubuntu-16.04
+   needs: [docker]
+   steps:
+   - name: Invoke deployment hook
+     uses: joelwmale/webhook-action@master
+     env:
+       WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+       data: "{ 'myField': 'myFieldValue'}"
