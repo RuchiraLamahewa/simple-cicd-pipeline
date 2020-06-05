@@ -130,8 +130,122 @@ jobs:
 
 ```
 
-#Step 7
+## Step 7
 
 Goto the Github action tab and see the logs on the workflow executing. 
 
 After execution has done. Go to the Docker Hub and check the docker image under your repository. 
+
+## Step 8
+
+Now need to pull the docker image from the docker HUB and run it in the server. 
+
+```bash
+docker pull sidathweerasinghe/simple-cicd-pipeline:latest
+
+docker run -itd --name demoapp -p 8080:8080 sidathweerasinghe/simple-cicd-pipeline:latest
+```
+
+## Step 9
+
+Let's config the webhook on the server. 
+
+Create a folder on the server name as "scripts". 
+
+Then add the "hooks.json" config to that folder. 
+
+```bash
+[
+  {
+    "id": "redeploy-webhook",
+    "execute-command": "/mnt/scripts/redeploy.sh",
+    "command-working-directory": "/mnt/scripts"
+  }
+]
+```
+Create the "redeploy.sh" to redeploy the docker image after webhook triggered from the Github. 
+
+```bash
+#!/bin/sh
+docker pull sidathweerasinghe/simple-cicd-pipeline:latest
+docker stop demoapp
+docker system prune -f
+docker run -itd --name demoapp -p 8080:8080 sidathweerasinghe/simple-cicd-pipeline:latest
+```
+Change the permission on that file.  
+
+```bash
+chmod +x redeploy.sh
+```
+
+## Step 10
+Run the webhook service and test.
+
+```bash
+webhook -hooks /mnt/scripts/hooks.json  -verbose &
+```
+
+Test URL - 
+
+```bash
+http://<ip>:9000/hooks/redeploy-webhook
+```
+
+## Step 11
+Integrate with the Github workflow
+
+Add the WEBHOOK_URL to the Github Secrets and edit the workflow. 
+
+
+```git
+name: CI-CD Pipeline
+
+on:
+  push:
+    branches: [ master ]
+
+jobs:
+  build:
+    name: Building the codebase
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up JDK 1.8
+      uses: actions/setup-java@v1
+      with:
+        java-version: 1.8
+    - name: Build with Maven
+      run: mvn -B package --file pom.xml
+
+  docker:
+    name: Publish - Docker Hub
+    runs-on: ubuntu-16.04
+    needs: [build]
+
+    env:
+      REPO: ${{ secrets.DOCKER_REPO }}
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up JDK 1.8
+        uses: actions/setup-java@v1
+        with:
+          java-version: 1.8
+      - name: Login to Docker Hub
+        run: docker login -u ${{ secrets.DOCKER_USER }} -p ${{ secrets.DOCKER_PASS }}
+      - name: Build Docker image
+        run: docker build -t $REPO:latest .
+      - name: Publish Docker image
+        run: docker push $REPO
+
+ redeploy:
+   name: Trigger webhook to Redeploy
+   runs-on: ubuntu-16.04
+   needs: [docker]
+   steps:
+   - name: Invoke deployment hook
+     uses: joelwmale/webhook-action@master
+     env:
+       WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+       data: "{ 'myField': 'myFieldValue'}"
+
+```
