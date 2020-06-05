@@ -20,7 +20,7 @@ public class HelloController {
 
         //Construction the person object
         Person person = new Person();
-        person.setGreeting("Hello");
+        person.setGreeting("Hi");
         person.setName("Sidath");
 
         //Logging
